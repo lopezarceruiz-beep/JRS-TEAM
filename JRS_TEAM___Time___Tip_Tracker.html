@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JRS TEAM — Time &amp; Tip Tracker</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    input[type="time"]::-webkit-calendar-picker-indicator,
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body class="bg-[#F5F8FF] text-[#253A82] min-h-screen antialiased">
+  <!-- Top Header -->
+  <header class="bg-white/95 backdrop-blur-xs border-b border-[#C0E0FF] sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-[#253A82] text-[#E3FC87] flex items-center justify-center shadow-sm">
+          <i data-lucide="clock" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-[#253A82] leading-tight">JRS TEAM</h1>
+          <p class="text-xs text-slate-500">Tue–Fri 9:30 AM–6:00 PM &middot; Sat 9:30 AM–5:00 PM</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center bg-[#C0E0FF]/45 p-1 rounded-xl" aria-label="Primary views">
+        <button id="tab-daily" type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition bg-[#253A82] text-white shadow-xs">
+          Daily Tracker
+        </button>
+        <button id="tab-weekly" type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition text-[#253A82]/80 hover:text-[#253A82]">
+          Weekly Summary
+        </button>
+        <button id="tab-history" type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition text-[#253A82]/80 hover:text-[#253A82]">
+          Log &amp; Export
+        </button>
+      </nav>
+
+      <button id="cloud-sync-btn" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#C0E0FF] bg-white hover:bg-[#C0E0FF]/35 text-[#253A82] transition">
+        <span id="cloud-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+        <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+        <span id="cloud-btn-label">Cloud Sync</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <!-- Toast Banner -->
+    <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-[#253A82] text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 transition-opacity">
+      <i data-lucide="check-circle-2" class="w-4 h-4 text-[#E3FC87]"></i>
+      <span id="toast-msg">Saved</span>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="confirm-title" class="text-base font-semibold text-slate-900">Confirm Action</h3>
+            <p id="confirm-body" class="text-sm text-slate-600 mt-1">Are you sure?</p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button id="confirm-cancel" type="button" class="px-3.5 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition">
+            Cancel
+          </button>
+          <button id="confirm-ok" type="button" class="px-3.5 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cloud Sync Modal -->
+    <div id="cloud-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-[#C0E0FF] space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-[#253A82] flex items-center gap-2">
+            <i data-lucide="cloud" class="w-4 h-4"></i>
+            Google Sheets Cloud Sync
+          </h3>
+          <button id="cloud-close-btn" type="button" class="p-1 rounded-lg hover:bg-slate-100 text-slate-500">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <p class="text-xs text-slate-600">Paste your deployed Google Apps Script Web App URL (<code class="bg-slate-100 px-1 rounded">https://script.google.com/macros/s/.../exec</code>) to sync your team's timecards and tips across all your devices.</p>
+        <div>
+          <label for="cloud-url-input" class="block text-xs font-semibold text-[#253A82] mb-1">Apps Script Web App URL</label>
+          <input id="cloud-url-input" type="url" placeholder="https://script.google.com/macros/s/.../exec"
+            class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#88A2FF]" />
+        </div>
+        <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+          <input id="cloud-autosync-chk" type="checkbox" class="rounded border-slate-300" />
+          <span>Auto-sync changes to cloud automatically</span>
+        </label>
+        <p id="cloud-status-text" class="text-xs text-slate-500">Status: Local only (not connected)</p>
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+          <div class="flex items-center gap-2">
+            <button id="cloud-pull-btn" type="button" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#C0E0FF]/60 hover:bg-[#C0E0FF] text-[#253A82] transition">
+              Pull from Cloud
+            </button>
+            <button id="cloud-push-btn" type="button" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#E3FC87] hover:bg-[#d7f56e] text-[#253A82] transition">
+              Push to Cloud
+            </button>
+          </div>
+          <button id="cloud-save-btn" type="button" class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-[#253A82] hover:bg-[#1b2c66] text-white transition">
+            Save &amp; Sync
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== DAILY TRACKER VIEW ==================== -->
+    <section id="view-daily" class="space-y-6">
+      <!-- Date & Schedule Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button id="prev-day-btn" type="button" title="Previous day" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <input id="date-picker" type="date" class="px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <button id="next-day-btn" type="button" title="Next day" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+          <button id="today-btn" type="button" class="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+            Today
+          </button>
+          <div id="schedule-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="fill-standard-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#E3FC87] text-[#253A82] hover:bg-[#d7f56e] transition">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            Fill Standard Shift
+          </button>
+          <button id="copy-summary-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#C0E0FF]/60 text-[#253A82] hover:bg-[#C0E0FF] transition">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            Copy Summary
+          </button>
+          <button id="reset-day-btn" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#FFB2F7]/35 text-[#253A82] hover:bg-[#FFB2F7]/60 transition">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            Reset Day
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Row -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white rounded-2xl border border-[#C0E0FF] p-4 shadow-xs">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Total Team Hours</span>
+            <span class="w-7 h-7 rounded-lg bg-[#C0E0FF]/60 text-[#253A82] flex items-center justify-center"><i data-lucide="timer" class="w-4 h-4"></i></span>
+          </div>
+          <p id="kpi-hours" class="text-2xl font-bold text-[#253A82] mt-1.5 tabular-nums">0.00 hrs</p>
+          <p id="kpi-active-count" class="text-xs text-slate-500 mt-0.5">0 of 4 members working</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-[#C0E0FF] p-4 shadow-xs">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Total Team Tips</span>
+            <span class="w-7 h-7 rounded-lg bg-[#E3FC87] text-[#253A82] flex items-center justify-center"><i data-lucide="banknote" class="w-4 h-4"></i></span>
+          </div>
+          <p id="kpi-tips" class="text-2xl font-bold text-[#253A82] mt-1.5 tabular-nums">$0.00</p>
+          <p id="kpi-tip-breakdown" class="text-xs text-slate-500 mt-0.5">Cash $0.00 &middot; Card $0.00</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-[#C0E0FF] p-4 shadow-xs">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Avg Tip Rate</span>
+            <span class="w-7 h-7 rounded-lg bg-[#FFB2F7]/55 text-[#253A82] flex items-center justify-center"><i data-lucide="trending-up" class="w-4 h-4"></i></span>
+          </div>
+          <p id="kpi-tip-rate" class="text-2xl font-bold text-[#253A82] mt-1.5 tabular-nums">$0.00/hr</p>
+          <p id="kpi-split-label" class="text-xs text-slate-500 mt-0.5">Individual tips</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-[#C0E0FF] p-4 shadow-xs">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Standard Shift</span>
+            <span class="w-7 h-7 rounded-lg bg-[#AB9DFF]/40 text-[#253A82] flex items-center justify-center"><i data-lucide="calendar-clock" class="w-4 h-4"></i></span>
+          </div>
+          <p id="kpi-std-shift" class="text-2xl font-bold text-[#253A82] mt-1.5 tabular-nums">8.50 hrs</p>
+          <p id="kpi-std-window" class="text-xs text-slate-500 mt-0.5">9:30 AM – 6:00 PM</p>
+        </div>
+      </div>
+
+      <!-- Main Grid: 4 Team Members + Tip Calculator -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- Left 7 Cols: 4 Team Members Time Tracker -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-slate-900">Team Timecards (4 Members)</h2>
+            <span class="text-xs text-slate-500">Click name to edit &middot; Live clock or manual entry</span>
+          </div>
+
+          <div id="members-container" class="space-y-3">
+            <!-- Member cards rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Right 5 Cols: Individual Tip Summary -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="calculator" class="w-4 h-4 text-emerald-600"></i>
+                Individual Tip Summary
+              </h2>
+              <span id="tip-pool-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#E3FC87] text-[#253A82] tabular-nums">$0.00 Total</span>
+            </div>
+            <p class="text-xs text-slate-500">Enter each member&#39;s cash and card tips on their timecard. Totals and effective hourly rates update live.</p>
+
+            <!-- Individual Payout Table -->
+            <div class="border-t border-slate-100 pt-3">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2.5">Per-Member Breakdown</h3>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 border-b border-slate-100">
+                      <th class="pb-2 font-medium">Member</th>
+                      <th class="pb-2 font-medium text-right">Cash</th>
+                      <th class="pb-2 font-medium text-right">Card</th>
+                      <th class="pb-2 font-medium text-right">Total Tips</th>
+                    </tr>
+                  </thead>
+                  <tbody id="payout-table-body" class="divide-y divide-slate-100">
+                    <!-- Populated by JS -->
+                  </tbody>
+                  <tfoot>
+                    <tr class="border-t-2 border-slate-200 font-bold text-slate-900">
+                      <td class="pt-2.5">Total (<span id="payout-total-hours" class="tabular-nums">0.00h</span>)</td>
+                      <td id="payout-total-cash" class="pt-2.5 text-right tabular-nums text-slate-700">$0.00</td>
+                      <td id="payout-total-card" class="pt-2.5 text-right tabular-nums text-slate-700">$0.00</td>
+                      <td id="payout-total-amt" class="pt-2.5 text-right text-[#253A82] tabular-nums">$0.00</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Visual Distribution Chart -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+            <h3 class="text-sm font-bold text-slate-900 mb-3">Hours &amp; Tip Distribution</h3>
+            <div class="relative h-60">
+              <canvas id="daily-chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== WEEKLY SUMMARY VIEW ==================== -->
+    <section id="view-weekly" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Weekly Team Summary</h2>
+          <p id="weekly-range-label" class="text-xs text-slate-500 mt-0.5">Week of ...</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="prev-week-btn" type="button" class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold hover:bg-slate-100 transition">
+            &larr; Prev Week
+          </button>
+          <button id="next-week-btn" type="button" class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold hover:bg-slate-100 transition">
+            Next Week &rarr;
+          </button>
+        </div>
+      </div>
+
+      <!-- Weekly Member Totals -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+              <th class="pb-3 font-semibold">Team Member</th>
+              <th class="pb-3 font-semibold text-right">Days Worked</th>
+              <th class="pb-3 font-semibold text-right">Total Hours</th>
+              <th class="pb-3 font-semibold text-right">Base Pay</th>
+              <th class="pb-3 font-semibold text-right">Total Tips</th>
+              <th class="pb-3 font-semibold text-right">Total Earnings</th>
+              <th class="pb-3 font-semibold text-right">Effective $/hr</th>
+            </tr>
+          </thead>
+          <tbody id="weekly-member-body" class="divide-y divide-slate-100">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Day-by-Day Grid -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs overflow-x-auto">
+        <h3 class="text-sm font-bold text-slate-900 mb-3">Day-by-Day Breakdown (Tue–Sat Workweek + Sun/Mon)</h3>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+              <th class="pb-2.5 font-semibold">Day</th>
+              <th class="pb-2.5 font-semibold">Schedule</th>
+              <th class="pb-2.5 font-semibold text-right">Team Hours</th>
+              <th class="pb-2.5 font-semibold text-right">Total Tips</th>
+              <th class="pb-2.5 font-semibold text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="weekly-days-body" class="divide-y divide-slate-100">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== HISTORY & EXPORT VIEW ==================== -->
+    <section id="view-history" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Logged Days &amp; CSV Export</h2>
+          <p class="text-xs text-slate-500 mt-0.5">All days with recorded hours or tips are saved automatically in your browser.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="export-csv-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#253A82] text-white hover:bg-[#1b2c66] transition">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Export CSV
+          </button>
+          <button id="clear-all-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-rose-50 text-rose-600 hover:bg-rose-100 transition">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            Clear All Data
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+              <th class="pb-3 font-semibold">Date</th>
+              <th class="pb-3 font-semibold">Day</th>
+              <th class="pb-3 font-semibold text-right">Working</th>
+              <th class="pb-3 font-semibold text-right">Total Hours</th>
+              <th class="pb-3 font-semibold text-right">Cash Tips</th>
+              <th class="pb-3 font-semibold text-right">Card Tips</th>
+              <th class="pb-3 font-semibold text-right">Total Tips</th>
+              <th class="pb-3 font-semibold text-right">Open</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body" class="divide-y divide-slate-100">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'team_time_tip_tracker_v1';
+      const MEMBER_COLORS = [
+        { bg: 'bg-[#88A2FF]', text: 'text-[#253A82]', hex: '#88A2FF', ring: 'ring-[#88A2FF]' },
+        { bg: 'bg-[#E3FC87]', text: 'text-[#253A82]', hex: '#253A82', ring: 'ring-[#E3FC87]' },
+        { bg: 'bg-[#FFB2F7]', text: 'text-[#253A82]', hex: '#FFB2F7', ring: 'ring-[#FFB2F7]' },
+        { bg: 'bg-[#AB9DFF]', text: 'text-[#253A82]', hex: '#AB9DFF', ring: 'ring-[#AB9DFF]' }
+      ];
+
+      function getTodayISO() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function parseISODate(iso) {
+        const [y, m, d] = iso.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      }
+
+      function addDaysISO(iso, delta) {
+        const dt = parseISODate(iso);
+        dt.setDate(dt.getDate() + delta);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      // Schedule rules: Tue(2)-Fri(5): 9:30am - 6:00pm (8.5h); Sat(6): 9:30am - 5:00pm (7.5h); Sun(0), Mon(1): Closed
+      function getScheduleForDate(iso) {
+        const dt = parseISODate(iso);
+        const dow = dt.getDay();
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        if (dow >= 2 && dow <= 5) {
+          return {
+            dayName: dayNames[dow],
+            isOpen: true,
+            start: '09:30',
+            end: '18:00',
+            stdHours: 8.5,
+            label: '9:30 AM – 6:00 PM'
+          };
+        }
+        if (dow === 6) {
+          return {
+            dayName: dayNames[dow],
+            isOpen: true,
+            start: '09:30',
+            end: '17:00',
+            stdHours: 7.5,
+            label: '9:30 AM – 5:00 PM'
+          };
+        }
+        return {
+          dayName: dayNames[dow],
+          isOpen: false,
+          start: '',
+          end: '',
+          stdHours: 0,
+          label: 'Closed (Standard)'
+        };
+      }
+
+      function createDefaultState() {
+        return {
+          members: [
+            { id: 'm1', name: 'Member 1', role: 'Staff', baseRate: 0 },
+            { id: 'm2', name: 'Member 2', role: 'Staff', baseRate: 0 },
+            { id: 'm3', name: 'Member 3', role: 'Staff', baseRate: 0 },
+            { id: 'm4', name: 'Member 4', role: 'Staff', baseRate: 0 }
+          ],
+          days: {}
+        };
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return createDefaultState();
+          const parsed = JSON.parse(raw);
+          if (!parsed || !Array.isArray(parsed.members) || parsed.members.length !== 4) {
+            return createDefaultState();
+          }
+          return {
+            members: parsed.members,
+            days: parsed.days || {}
+          };
+        } catch (e) {
+          return createDefaultState();
+        }
+      }
+
+      const CLOUD_CFG_KEY = 'team_time_tip_cloud_cfg_v1';
+      let cloudCfg = loadCloudCfg();
+      let cloudSyncTimer = null;
+
+      function loadCloudCfg() {
+        try {
+          const raw = localStorage.getItem(CLOUD_CFG_KEY);
+          if (!raw) return { url: '', autoSync: true, lastSync: '' };
+          const parsed = JSON.parse(raw);
+          return {
+            url: parsed.url || '',
+            autoSync: parsed.autoSync !== false,
+            lastSync: parsed.lastSync || ''
+          };
+        } catch (e) {
+          return { url: '', autoSync: true, lastSync: '' };
+        }
+      }
+
+      function saveCloudCfg() {
+        try {
+          localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
+        } catch (e) {}
+      }
+
+      function updateCloudBadge(status, msg) {
+        const dot = document.getElementById('cloud-dot');
+        const label = document.getElementById('cloud-btn-label');
+        const statusText = document.getElementById('cloud-status-text');
+        if (!dot || !label) return;
+        if (status === 'connected') {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+          label.textContent = 'Synced';
+        } else if (status === 'syncing') {
+          dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+          label.textContent = 'Syncing...';
+        } else if (status === 'error') {
+          dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+          label.textContent = 'Sync Error';
+        } else {
+          dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+          label.textContent = 'Cloud Sync';
+        }
+        if (statusText && msg) {
+          statusText.textContent = msg;
+        }
+      }
+
+      async function pushToCloud(silent) {
+        if (!cloudCfg.url) return;
+        updateCloudBadge('syncing', 'Status: Pushing changes to Google Sheets...');
+        try {
+          const res = await fetch(cloudCfg.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(state)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          cloudCfg.lastSync = new Date().toLocaleTimeString();
+          saveCloudCfg();
+          updateCloudBadge('connected', `Status: Synced at ${cloudCfg.lastSync}`);
+          if (!silent) showToast('Pushed to cloud!');
+        } catch (err) {
+          updateCloudBadge('error', `Status: Push failed (${err.message})`);
+          if (!silent) showToast('Cloud push failed — saved locally');
+        }
+      }
+
+      async function pullFromCloud(silent) {
+        if (!cloudCfg.url) return;
+        updateCloudBadge('syncing', 'Status: Loading from Google Sheets...');
+        try {
+          const res = await fetch(cloudCfg.url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (data && Array.isArray(data.members) && data.members.length === 4) {
+            state = { members: data.members, days: data.days || {} };
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+            if (activeTab === 'daily') renderDaily();
+            if (activeTab === 'weekly') renderWeekly();
+            if (activeTab === 'history') renderHistory();
+          }
+          cloudCfg.lastSync = new Date().toLocaleTimeString();
+          saveCloudCfg();
+          updateCloudBadge('connected', `Status: Synced at ${cloudCfg.lastSync}`);
+          if (!silent) showToast('Loaded latest data from cloud!');
+        } catch (err) {
+          updateCloudBadge('error', `Status: Load failed (${err.message})`);
+          if (!silent) showToast('Cloud load failed — using local data');
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+          // Ignore storage quota / sandbox restriction errors
+        }
+        if (cloudCfg.url && cloudCfg.autoSync) {
+          clearTimeout(cloudSyncTimer);
+          cloudSyncTimer = setTimeout(() => pushToCloud(true), 1200);
+        }
+      }
+
+      function createDefaultDayRecord(iso) {
+        const sched = getScheduleForDate(iso);
+        const entries = {};
+        state.members.forEach((m) => {
+          entries[m.id] = {
+            working: sched.isOpen,
+            start: sched.isOpen ? sched.start : '',
+            end: sched.isOpen ? sched.end : '',
+            breakMin: 0,
+            cashTips: 0,
+            cardTips: 0,
+            clockedInAt: null
+          };
+        });
+        return {
+          entries
+        };
+      }
+
+      function getDayRecord(iso) {
+        if (!state.days[iso]) {
+          state.days[iso] = createDefaultDayRecord(iso);
+        }
+        return state.days[iso];
+      }
+
+      function timeToMinutes(hhmm) {
+        if (!hhmm || !hhmm.includes(':')) return null;
+        const [h, m] = hhmm.split(':').map(Number);
+        if (Number.isNaN(h) || Number.isNaN(m)) return null;
+        return h * 60 + m;
+      }
+
+      function getEntryMinutes(entry) {
+        if (!entry || !entry.working) return 0;
+        const s = timeToMinutes(entry.start);
+        const e = timeToMinutes(entry.end);
+        if (s === null || e === null) return 0;
+        let diff = e - s;
+        if (diff < 0) diff += 24 * 60; // overnight guard
+        const brk = Math.max(0, Number(entry.breakMin) || 0);
+        return Math.max(0, diff - brk);
+      }
+
+      function formatHoursHM(hours) {
+        const totalMin = Math.round(hours * 60);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        return `${h}h ${String(m).padStart(2, '0')}m`;
+      }
+
+      function formatCurrency(val) {
+        const n = Number(val) || 0;
+        return '$' + n.toFixed(2);
+      }
+
+      function calculateDayMetrics(iso) {
+        const day = getDayRecord(iso);
+        const sched = getScheduleForDate(iso);
+
+        const rows = state.members.map((m, idx) => {
+          const entry = day.entries[m.id] || { working: false, start: '', end: '', breakMin: 0, cashTips: 0, cardTips: 0 };
+          const mins = getEntryMinutes(entry);
+          const hours = mins / 60;
+          const basePay = hours * (Math.max(0, Number(m.baseRate) || 0));
+          const cashTips = Math.max(0, Number(entry.cashTips) || 0);
+          const cardTips = Math.max(0, Number(entry.cardTips) || 0);
+          const tipAmount = Math.round((cashTips + cardTips) * 100) / 100;
+          const tipRate = hours > 0 ? tipAmount / hours : 0;
+          return {
+            member: m,
+            color: MEMBER_COLORS[idx],
+            entry,
+            minutes: mins,
+            hours,
+            basePay,
+            cashTips,
+            cardTips,
+            tipAmount,
+            sharePct: 0,
+            tipRate,
+            totalPay: basePay + tipAmount
+          };
+        });
+
+        const totalHours = rows.reduce((acc, r) => acc + r.hours, 0);
+        const cash = Math.round(rows.reduce((acc, r) => acc + r.cashTips, 0) * 100) / 100;
+        const card = Math.round(rows.reduce((acc, r) => acc + r.cardTips, 0) * 100) / 100;
+        const totalTips = Math.round((cash + card) * 100) / 100;
+
+        if (totalTips > 0) {
+          rows.forEach((r) => {
+            r.sharePct = (r.tipAmount / totalTips) * 100;
+          });
+        }
+
+        return {
+          iso,
+          sched,
+          day,
+          cash,
+          card,
+          totalTips,
+          totalHours,
+          workingCount: rows.filter((r) => r.entry.working).length,
+          avgTipRate: totalHours > 0 ? totalTips / totalHours : 0,
+          rows
+        };
+      }
+
+      // App State
+      let state = loadState();
+      let selectedDate = getTodayISO();
+      let activeTab = 'daily';
+      let dailyChart = null;
+      let confirmCallback = null;
+      let liveTicker = null;
+
+      // DOM Refs
+      const datePicker = document.getElementById('date-picker');
+      const scheduleBadge = document.getElementById('schedule-badge');
+      const membersContainer = document.getElementById('members-container');
+
+
+      function showToast(msg) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').textContent = msg;
+        toast.classList.remove('hidden');
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 2200);
+      }
+
+      function openConfirm(title, body, onConfirm) {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-body').textContent = body;
+        confirmCallback = onConfirm;
+        document.getElementById('confirm-modal').classList.remove('hidden');
+      }
+
+      function closeConfirm() {
+        document.getElementById('confirm-modal').classList.add('hidden');
+        confirmCallback = null;
+      }
+
+      document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
+      document.getElementById('confirm-ok').addEventListener('click', () => {
+        if (confirmCallback) confirmCallback();
+        closeConfirm();
+      });
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function getInitials(name) {
+        const parts = (name || 'M').trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+        return parts[0].slice(0, 2).toUpperCase();
+      }
+
+      function currentHHMM() {
+        const now = new Date();
+        return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      }
+
+      function renderDaily() {
+        datePicker.value = selectedDate;
+        const metrics = calculateDayMetrics(selectedDate);
+        const { sched, day, rows } = metrics;
+
+        // Schedule badge
+        if (sched.isOpen) {
+          scheduleBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#E3FC87] text-[#253A82] border border-[#253A82]/15';
+          scheduleBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#253A82]"></span>${sched.dayName} &middot; ${sched.label}`;
+        } else {
+          scheduleBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200';
+          scheduleBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span>${sched.dayName} &middot; ${sched.label}`;
+        }
+
+        // KPIs
+        document.getElementById('kpi-hours').textContent = `${metrics.totalHours.toFixed(2)} hrs`;
+        document.getElementById('kpi-active-count').textContent = `${metrics.workingCount} of 4 members working`;
+        document.getElementById('kpi-tips').textContent = formatCurrency(metrics.totalTips);
+        document.getElementById('kpi-tip-breakdown').textContent = `Cash ${formatCurrency(metrics.cash)} · Card ${formatCurrency(metrics.card)}`;
+        document.getElementById('kpi-tip-rate').textContent = `${formatCurrency(metrics.avgTipRate)}/hr`;
+        document.getElementById('kpi-split-label').textContent = 'Individual tips';
+        document.getElementById('kpi-std-shift').textContent = `${sched.stdHours.toFixed(2)} hrs`;
+        document.getElementById('kpi-std-window').textContent = sched.label;
+        document.getElementById('tip-pool-badge').textContent = `${formatCurrency(metrics.totalTips)} Total`;
+
+        // Render 4 Member Cards
+        membersContainer.innerHTML = rows.map((r) => {
+          const { member, color, entry, hours } = r;
+          const isClockedIn = Boolean(entry.clockedInAt);
+          const diffStd = sched.isOpen && entry.working ? hours - sched.stdHours : 0;
+          let statusPill = '';
+          if (!entry.working) {
+            statusPill = `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Off Today</span>`;
+          } else if (isClockedIn) {
+            statusPill = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#E3FC87] text-[#253A82] animate-pulse">Clocked In (${escapeHtml(entry.clockedInAt)})</span>`;
+          } else if (sched.isOpen && Math.abs(diffStd) >= 0.05) {
+            const sign = diffStd > 0 ? '+' : '';
+            const cls = diffStd > 0 ? 'bg-[#FFB2F7]/50 text-[#253A82]' : 'bg-[#C0E0FF]/70 text-[#253A82]';
+            statusPill = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ${cls}">${sign}${diffStd.toFixed(2)}h vs std</span>`;
+          } else if (sched.isOpen && hours > 0) {
+            statusPill = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#C0E0FF]/60 text-[#253A82]">Standard Shift</span>`;
+          }
+
+          return `
+            <div class="bg-white rounded-2xl border ${entry.working ? 'border-slate-200' : 'border-slate-200/70 opacity-75'} p-4 shadow-xs transition" data-member-id="${member.id}">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-10 h-10 rounded-xl ${color.bg} ${color.text} font-bold text-sm flex items-center justify-center shrink-0">
+                    ${escapeHtml(getInitials(member.name))}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <input type="text" data-action="rename" data-id="${member.id}" value="${escapeHtml(member.name)}" aria-label="Member name"
+                        class="text-sm font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none px-0.5 py-0.5 w-32 sm:w-40" />
+                      <span data-status-for="${member.id}">${statusPill}</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                      <label class="inline-flex items-center gap-1">
+                        <span>Rate $/hr:</span>
+                        <input type="number" min="0" step="0.5" data-action="rate" data-id="${member.id}" value="${member.baseRate || ''}" placeholder="0"
+                          class="w-14 px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-medium tabular-nums focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                      </label>
+                      <span>&middot;</span>
+                      <span data-hours-for="${member.id}" class="font-semibold text-slate-700 tabular-nums">${hours.toFixed(2)} hrs (${formatHoursHM(hours)})</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button type="button" data-action="clock-toggle" data-id="${member.id}"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold transition ${isClockedIn ? 'bg-[#FFB2F7] text-[#253A82] hover:bg-[#f79bee]' : 'bg-[#253A82] text-white hover:bg-[#1b2c66]'}">
+                    ${isClockedIn ? 'Clock Out' : 'Clock In'}
+                  </button>
+                  <button type="button" data-action="working-toggle" data-id="${member.id}"
+                    class="px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition ${entry.working ? 'border-slate-200 text-slate-700 hover:bg-slate-100' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}">
+                    ${entry.working ? 'Set Off' : 'Set Working'}
+                  </button>
+                </div>
+              </div>
+
+              ${entry.working ? `
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-3.5 pt-3.5 border-t border-slate-100">
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-500 mb-1">Start Time</label>
+                  <input type="time" data-action="start" data-id="${member.id}" value="${entry.start || ''}"
+                    class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-500 mb-1">End Time</label>
+                  <input type="time" data-action="end" data-id="${member.id}" value="${entry.end || ''}"
+                    class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-500 mb-1">Break (min)</label>
+                  <div class="flex items-center gap-1">
+                    <input type="number" min="0" max="240" step="5" data-action="break" data-id="${member.id}" value="${entry.breakMin || 0}"
+                      class="w-full px-2 py-1.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <button type="button" data-action="break-30" data-id="${member.id}" title="Set 30 min break"
+                      class="px-2 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 shrink-0">30m</button>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-emerald-700 mb-1">Cash Tips ($)</label>
+                  <input type="number" min="0" step="0.01" data-action="cash-tip" data-id="${member.id}" value="${entry.cashTips ? entry.cashTips : ''}" placeholder="0.00"
+                    class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-emerald-700 mb-1">Card Tips ($)</label>
+                  <input type="number" min="0" step="0.01" data-action="card-tip" data-id="${member.id}" value="${entry.cardTips ? entry.cardTips : ''}" placeholder="0.00"
+                    class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+              </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+
+        // Payout Table
+        renderPayoutTable(metrics);
+
+        renderDailyChart(rows);
+      }
+
+      function renderPayoutTable(metrics) {
+        const { rows } = metrics;
+        const tbody = document.getElementById('payout-table-body');
+        tbody.innerHTML = rows.map((r) => `
+          <tr>
+            <td class="py-2.5">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${r.color.hex}"></span>
+                <span class="font-medium text-slate-900">${escapeHtml(r.member.name)}</span>
+              </div>
+              <div class="text-[11px] text-slate-400 pl-4.5">${r.hours.toFixed(2)}h${r.member.baseRate > 0 ? ` · Total ${formatCurrency(r.totalPay)}` : ''}</div>
+            </td>
+            <td class="py-2.5 text-right text-slate-600 tabular-nums">${formatCurrency(r.cashTips)}</td>
+            <td class="py-2.5 text-right text-slate-600 tabular-nums">${formatCurrency(r.cardTips)}</td>
+            <td class="py-2.5 text-right font-bold text-[#253A82] tabular-nums">
+              ${formatCurrency(r.tipAmount)}
+              ${r.hours > 0 && r.tipAmount > 0 ? `<div class="text-[11px] font-normal text-slate-400">${formatCurrency(r.tipRate)}/hr</div>` : ''}
+            </td>
+          </tr>
+        `).join('');
+
+        document.getElementById('payout-total-hours').textContent = `${metrics.totalHours.toFixed(2)}h`;
+        document.getElementById('payout-total-cash').textContent = formatCurrency(metrics.cash);
+        document.getElementById('payout-total-card').textContent = formatCurrency(metrics.card);
+        document.getElementById('payout-total-amt').textContent = formatCurrency(metrics.totalTips);
+      }
+
+      function syncLiveMetrics(changedMemberId) {
+        const m = calculateDayMetrics(selectedDate);
+        document.getElementById('kpi-hours').textContent = `${m.totalHours.toFixed(2)} hrs`;
+        document.getElementById('kpi-active-count').textContent = `${m.workingCount} of 4 members working`;
+        document.getElementById('kpi-tips').textContent = formatCurrency(m.totalTips);
+        document.getElementById('kpi-tip-breakdown').textContent = `Cash ${formatCurrency(m.cash)} · Card ${formatCurrency(m.card)}`;
+        document.getElementById('kpi-tip-rate').textContent = `${formatCurrency(m.avgTipRate)}/hr`;
+        document.getElementById('tip-pool-badge').textContent = `${formatCurrency(m.totalTips)} Total`;
+
+        if (changedMemberId) {
+          const r = m.rows.find((row) => row.member.id === changedMemberId);
+          if (r) {
+            const hrsEl = membersContainer.querySelector(`[data-hours-for="${changedMemberId}"]`);
+            if (hrsEl) {
+              hrsEl.textContent = `${r.hours.toFixed(2)} hrs (${formatHoursHM(r.hours)})`;
+            }
+            const statusEl = membersContainer.querySelector(`[data-status-for="${changedMemberId}"]`);
+            if (statusEl) {
+              const { entry, hours } = r;
+              const { sched } = m;
+              const isClockedIn = Boolean(entry.clockedInAt);
+              const diffStd = sched.isOpen && entry.working ? hours - sched.stdHours : 0;
+              let statusPill = '';
+              if (!entry.working) {
+                statusPill = `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Off Today</span>`;
+              } else if (isClockedIn) {
+                statusPill = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 animate-pulse">Clocked In (${escapeHtml(entry.clockedInAt)})</span>`;
+              } else if (sched.isOpen && Math.abs(diffStd) >= 0.05) {
+                const sign = diffStd > 0 ? '+' : '';
+                const cls = diffStd > 0 ? 'bg-amber-50 text-amber-700' : 'bg-sky-50 text-sky-700';
+                statusPill = `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${cls}">${sign}${diffStd.toFixed(2)}h vs std</span>`;
+              } else if (sched.isOpen && hours > 0) {
+                statusPill = `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Standard Shift</span>`;
+              }
+              statusEl.innerHTML = statusPill;
+            }
+          }
+        }
+
+        renderPayoutTable(m);
+        renderDailyChart(m.rows);
+      }
+
+      function renderDailyChart(rows) {
+        if (typeof Chart === 'undefined') return;
+        const ctx = document.getElementById('daily-chart').getContext('2d');
+        const labels = rows.map((r) => r.member.name);
+        const hoursData = rows.map((r) => Number(r.hours.toFixed(2)));
+        const tipsData = rows.map((r) => Number(r.tipAmount.toFixed(2)));
+
+        if (dailyChart) {
+          dailyChart.data.labels = labels;
+          dailyChart.data.datasets[0].data = hoursData;
+          dailyChart.data.datasets[1].data = tipsData;
+          dailyChart.update();
+          return;
+        }
+
+        dailyChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Hours Worked',
+                data: hoursData,
+                backgroundColor: '#88A2FF',
+                borderRadius: 6,
+                yAxisID: 'yHours'
+              },
+              {
+                label: 'Tip Payout ($)',
+                data: tipsData,
+                backgroundColor: '#253A82',
+                borderRadius: 6,
+                yAxisID: 'yTips'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { boxWidth: 12, font: { size: 11 } }
+              }
+            },
+            scales: {
+              yHours: {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                title: { display: true, text: 'Hours', font: { size: 11 } }
+              },
+              yTips: {
+                type: 'linear',
+                position: 'right',
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                title: { display: true, text: 'Tips ($)', font: { size: 11 } }
+              }
+            }
+          }
+        });
+      }
+
+      function getWeekStartMonday(iso) {
+        const dt = parseISODate(iso);
+        const dow = dt.getDay();
+        const diff = dow === 0 ? -6 : 1 - dow;
+        dt.setDate(dt.getDate() + diff);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function renderWeekly() {
+        const weekStart = getWeekStartMonday(selectedDate);
+        const weekEnd = addDaysISO(weekStart, 6);
+        document.getElementById('weekly-range-label').textContent = `Week of ${weekStart} to ${weekEnd}`;
+
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+          weekDates.push(addDaysISO(weekStart, i));
+        }
+
+        const totals = state.members.map((m, idx) => ({
+          member: m,
+          color: MEMBER_COLORS[idx],
+          daysWorked: 0,
+          hours: 0,
+          basePay: 0,
+          tips: 0
+        }));
+
+        const dayRowsHtml = weekDates.map((iso) => {
+          const hasStored = Boolean(state.days[iso]);
+          const sched = getScheduleForDate(iso);
+          let teamHrs = 0;
+          let tipPool = 0;
+          if (hasStored) {
+            const m = calculateDayMetrics(iso);
+            teamHrs = m.totalHours;
+            tipPool = m.totalTips;
+            m.rows.forEach((r, idx) => {
+              if (r.hours > 0) totals[idx].daysWorked += 1;
+              totals[idx].hours += r.hours;
+              totals[idx].basePay += r.basePay;
+              totals[idx].tips += r.tipAmount;
+            });
+          }
+
+          return `
+            <tr class="${iso === selectedDate ? 'bg-indigo-50/50' : ''}">
+              <td class="py-2.5 font-medium text-slate-900">${sched.dayName} <span class="text-xs text-slate-400">(${iso})</span></td>
+              <td class="py-2.5 text-xs ${sched.isOpen ? 'text-emerald-700' : 'text-slate-400'}">${sched.label}</td>
+              <td class="py-2.5 text-right tabular-nums text-slate-700">${hasStored ? teamHrs.toFixed(2) + 'h' : '—'}</td>
+              <td class="py-2.5 text-right tabular-nums font-medium text-emerald-600">${hasStored ? formatCurrency(tipPool) : '—'}</td>
+              <td class="py-2.5 text-right">
+                <button type="button" data-jump-date="${iso}" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                  Open Day
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        document.getElementById('weekly-days-body').innerHTML = dayRowsHtml;
+
+        document.getElementById('weekly-member-body').innerHTML = totals.map((t) => {
+          const totalEarn = t.basePay + t.tips;
+          const effRate = t.hours > 0 ? totalEarn / t.hours : 0;
+          return `
+            <tr>
+              <td class="py-3">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${t.color.hex}"></span>
+                  <span class="font-semibold text-slate-900">${escapeHtml(t.member.name)}</span>
+                </div>
+              </td>
+              <td class="py-3 text-right tabular-nums text-slate-600">${t.daysWorked}</td>
+              <td class="py-3 text-right tabular-nums font-medium text-slate-900">${t.hours.toFixed(2)}h</td>
+              <td class="py-3 text-right tabular-nums text-slate-600">${formatCurrency(t.basePay)}</td>
+              <td class="py-3 text-right tabular-nums font-semibold text-emerald-600">${formatCurrency(t.tips)}</td>
+              <td class="py-3 text-right tabular-nums font-bold text-slate-900">${formatCurrency(totalEarn)}</td>
+              <td class="py-3 text-right tabular-nums text-slate-600">${formatCurrency(effRate)}/hr</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function renderHistory() {
+        const keys = Object.keys(state.days).sort((a, b) => b.localeCompare(a));
+        const tbody = document.getElementById('history-table-body');
+        if (keys.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-500 text-sm">No days logged yet.</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = keys.map((iso) => {
+          const m = calculateDayMetrics(iso);
+          return `
+            <tr>
+              <td class="py-2.5 font-medium text-slate-900 tabular-nums">${iso}</td>
+              <td class="py-2.5 text-slate-600">${m.sched.dayName}</td>
+              <td class="py-2.5 text-right tabular-nums text-slate-600">${m.workingCount}/4</td>
+              <td class="py-2.5 text-right tabular-nums font-medium text-slate-900">${m.totalHours.toFixed(2)}h</td>
+              <td class="py-2.5 text-right tabular-nums text-slate-600">${formatCurrency(m.cash)}</td>
+              <td class="py-2.5 text-right tabular-nums text-slate-600">${formatCurrency(m.card)}</td>
+              <td class="py-2.5 text-right tabular-nums font-semibold text-emerald-600">${formatCurrency(m.totalTips)}</td>
+              <td class="py-2.5 text-right">
+                <button type="button" data-jump-date="${iso}" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                  View
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function switchTab(tab) {
+        activeTab = tab;
+        document.getElementById('view-daily').classList.toggle('hidden', tab !== 'daily');
+        document.getElementById('view-weekly').classList.toggle('hidden', tab !== 'weekly');
+        document.getElementById('view-history').classList.toggle('hidden', tab !== 'history');
+
+        ['daily', 'weekly', 'history'].forEach((t) => {
+          const btn = document.getElementById(`tab-${t}`);
+          if (t === tab) {
+            btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition bg-[#253A82] text-white shadow-xs';
+          } else {
+            btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition text-[#253A82]/80 hover:text-[#253A82]';
+          }
+        });
+
+        if (tab === 'daily') renderDaily();
+        if (tab === 'weekly') renderWeekly();
+        if (tab === 'history') renderHistory();
+      }
+
+      // Event Listeners: Tabs
+      document.getElementById('tab-daily').addEventListener('click', () => switchTab('daily'));
+      document.getElementById('tab-weekly').addEventListener('click', () => switchTab('weekly'));
+      document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
+
+      // Date Navigation
+      datePicker.addEventListener('change', (e) => {
+        if (e.target.value) {
+          selectedDate = e.target.value;
+          saveState();
+          renderDaily();
+        }
+      });
+      document.getElementById('prev-day-btn').addEventListener('click', () => {
+        selectedDate = addDaysISO(selectedDate, -1);
+        saveState();
+        renderDaily();
+      });
+      document.getElementById('next-day-btn').addEventListener('click', () => {
+        selectedDate = addDaysISO(selectedDate, 1);
+        saveState();
+        renderDaily();
+      });
+      document.getElementById('today-btn').addEventListener('click', () => {
+        selectedDate = getTodayISO();
+        saveState();
+        renderDaily();
+      });
+
+      // Quick Actions
+      document.getElementById('fill-standard-btn').addEventListener('click', () => {
+        const sched = getScheduleForDate(selectedDate);
+        if (!sched.isOpen) {
+          showToast(`${sched.dayName} is closed by default — toggle "Set Working" to log custom hours.`);
+          return;
+        }
+        const day = getDayRecord(selectedDate);
+        state.members.forEach((m) => {
+          const prev = day.entries[m.id] || {};
+          day.entries[m.id] = {
+            working: true,
+            start: sched.start,
+            end: sched.end,
+            breakMin: 0,
+            cashTips: prev.cashTips || 0,
+            cardTips: prev.cardTips || 0,
+            clockedInAt: null
+          };
+        });
+        saveState();
+        renderDaily();
+        showToast(`Filled ${sched.label} for all 4 members`);
+      });
+
+      document.getElementById('reset-day-btn').addEventListener('click', () => {
+        openConfirm('Reset Selected Day?', `This will clear all hours and tips for ${selectedDate}.`, () => {
+          state.days[selectedDate] = createDefaultDayRecord(selectedDate);
+          saveState();
+          renderDaily();
+          showToast(`Reset ${selectedDate}`);
+        });
+      });
+
+      document.getElementById('copy-summary-btn').addEventListener('click', () => {
+        const m = calculateDayMetrics(selectedDate);
+        const lines = [
+          `JRS TEAM Time & Tip Summary — ${m.sched.dayName}, ${m.iso} (${m.sched.label})`,
+          `Total Hours: ${m.totalHours.toFixed(2)}h | Total Tips: ${formatCurrency(m.totalTips)} (Cash ${formatCurrency(m.cash)}, Card ${formatCurrency(m.card)})`,
+          ...m.rows.map((r) => `- ${r.member.name}: ${r.hours.toFixed(2)}h | Tips ${formatCurrency(r.tipAmount)} (Cash ${formatCurrency(r.cashTips)}, Card ${formatCurrency(r.cardTips)})`)
+        ];
+        const text = lines.join('\n');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => showToast('Daily summary copied!')).catch(() => fallbackCopy(text));
+        } else {
+          fallbackCopy(text);
+        }
+      });
+
+      function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showToast('Daily summary copied!');
+        } catch (e) {
+          showToast('Copy failed');
+        }
+        document.body.removeChild(ta);
+      }
+
+
+
+      // Delegated Member Card Events
+      membersContainer.addEventListener('input', (e) => {
+        const el = e.target;
+        const action = el.dataset.action;
+        const id = el.dataset.id;
+        if (!action || !id) return;
+        const member = state.members.find((m) => m.id === id);
+        const day = getDayRecord(selectedDate);
+        const entry = day.entries[id];
+
+        if (action === 'rename' && member) {
+          member.name = el.value || 'Member';
+          saveState();
+          // Update payout table & chart without losing focus on name input
+          const m = calculateDayMetrics(selectedDate);
+          if (dailyChart) {
+            dailyChart.data.labels = m.rows.map((r) => r.member.name);
+            dailyChart.update();
+          }
+          renderPayoutTable(m);
+          return;
+        }
+
+        if (action === 'rate' && member) {
+          member.baseRate = Math.max(0, parseFloat(el.value) || 0);
+          saveState();
+          syncLiveMetrics(id);
+          return;
+        }
+
+        if (action === 'start' && entry) {
+          entry.start = el.value;
+          entry.clockedInAt = null;
+          saveState();
+          syncLiveMetrics(id);
+          return;
+        }
+
+        if (action === 'end' && entry) {
+          entry.end = el.value;
+          entry.clockedInAt = null;
+          saveState();
+          syncLiveMetrics(id);
+          return;
+        }
+
+        if (action === 'break' && entry) {
+          entry.breakMin = Math.max(0, parseInt(el.value, 10) || 0);
+          saveState();
+          syncLiveMetrics(id);
+          return;
+        }
+
+        if ((action === 'cash-tip' || action === 'card-tip') && entry) {
+          const val = Math.max(0, parseFloat(el.value) || 0);
+          if (action === 'cash-tip') entry.cashTips = val;
+          else entry.cardTips = val;
+          saveState();
+          syncLiveMetrics(id);
+        }
+      });
+
+      membersContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        const day = getDayRecord(selectedDate);
+        const entry = day.entries[id];
+        if (!entry) return;
+
+        if (action === 'working-toggle') {
+          entry.working = !entry.working;
+          if (entry.working && !entry.start && !entry.end) {
+            const sched = getScheduleForDate(selectedDate);
+            entry.start = sched.isOpen ? sched.start : '09:30';
+            entry.end = sched.isOpen ? sched.end : '17:00';
+          }
+          if (!entry.working) entry.clockedInAt = null;
+          saveState();
+          renderDaily();
+        } else if (action === 'clock-toggle') {
+          const now = currentHHMM();
+          if (!entry.clockedInAt) {
+            entry.working = true;
+            entry.start = now;
+            entry.end = now;
+            entry.clockedInAt = now;
+            showToast(`Clocked in at ${now}`);
+          } else {
+            entry.end = now;
+            entry.clockedInAt = null;
+            showToast(`Clocked out at ${now}`);
+          }
+          saveState();
+          renderDaily();
+        } else if (action === 'break-30') {
+          entry.breakMin = entry.breakMin === 30 ? 0 : 30;
+          saveState();
+          renderDaily();
+        }
+      });
+
+      // Weekly Navigation & Jump
+      document.getElementById('prev-week-btn').addEventListener('click', () => {
+        selectedDate = addDaysISO(selectedDate, -7);
+        renderWeekly();
+      });
+      document.getElementById('next-week-btn').addEventListener('click', () => {
+        selectedDate = addDaysISO(selectedDate, 7);
+        renderWeekly();
+      });
+
+      document.body.addEventListener('click', (e) => {
+        const jump = e.target.closest('[data-jump-date]');
+        if (jump) {
+          selectedDate = jump.dataset.jumpDate;
+          switchTab('daily');
+        }
+      });
+
+      // Export CSV & Clear All
+      document.getElementById('export-csv-btn').addEventListener('click', () => {
+        const keys = Object.keys(state.days).sort();
+        const header = ['Date', 'Day', 'Member', 'Working', 'Start', 'End', 'Break_Min', 'Net_Hours', 'Base_Pay', 'Cash_Tips', 'Card_Tips', 'Total_Tips', 'Total_Pay'];
+        const csvRows = [header.join(',')];
+        keys.forEach((iso) => {
+          const m = calculateDayMetrics(iso);
+          m.rows.forEach((r) => {
+            csvRows.push([
+              iso,
+              m.sched.dayName,
+              `"${r.member.name.replace(/"/g, '""')}"`,
+              r.entry.working ? 'Yes' : 'No',
+              r.entry.start || '',
+              r.entry.end || '',
+              r.entry.breakMin || 0,
+              r.hours.toFixed(2),
+              r.basePay.toFixed(2),
+              r.cashTips.toFixed(2),
+              r.cardTips.toFixed(2),
+              r.tipAmount.toFixed(2),
+              r.totalPay.toFixed(2)
+            ].join(','));
+          });
+        });
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `team-time-tips-${getTodayISO()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('CSV exported');
+      });
+
+      document.getElementById('clear-all-btn').addEventListener('click', () => {
+        openConfirm('Clear All Saved Data?', 'This will erase all logged days and reset member names to defaults.', () => {
+          state = createDefaultState();
+          saveState();
+          renderHistory();
+          showToast('All data cleared');
+        });
+      });
+
+      // Live ticker for any clocked-in member
+      liveTicker = setInterval(() => {
+        const day = state.days[selectedDate];
+        if (!day) return;
+        let updated = false;
+        const now = currentHHMM();
+        Object.values(day.entries).forEach((entry) => {
+          if (entry.clockedInAt && entry.end !== now) {
+            entry.end = now;
+            updated = true;
+          }
+        });
+        if (updated && activeTab === 'daily') {
+          saveState();
+          renderDaily();
+        }
+      }, 30000);
+
+      // Cloud Sync Modal Events
+      document.getElementById('cloud-sync-btn').addEventListener('click', () => {
+        document.getElementById('cloud-url-input').value = cloudCfg.url || '';
+        document.getElementById('cloud-autosync-chk').checked = cloudCfg.autoSync;
+        updateCloudBadge(cloudCfg.url ? 'connected' : 'local', cloudCfg.url ? `Status: Connected (last sync ${cloudCfg.lastSync || 'ready'})` : 'Status: Local only (not connected)');
+        document.getElementById('cloud-modal').classList.remove('hidden');
+      });
+      document.getElementById('cloud-close-btn').addEventListener('click', () => {
+        document.getElementById('cloud-modal').classList.add('hidden');
+      });
+      document.getElementById('cloud-save-btn').addEventListener('click', async () => {
+        const url = document.getElementById('cloud-url-input').value.trim();
+        if (url && !url.startsWith('https://')) {
+          updateCloudBadge('error', 'Status: URL must start with https://');
+          return;
+        }
+        cloudCfg.url = url;
+        cloudCfg.autoSync = document.getElementById('cloud-autosync-chk').checked;
+        saveCloudCfg();
+        if (cloudCfg.url) {
+          await pushToCloud(false);
+          document.getElementById('cloud-modal').classList.add('hidden');
+        } else {
+          updateCloudBadge('local', 'Status: Local only (not connected)');
+          document.getElementById('cloud-modal').classList.add('hidden');
+          showToast('Switched to local-only mode');
+        }
+      });
+      document.getElementById('cloud-pull-btn').addEventListener('click', () => {
+        const url = document.getElementById('cloud-url-input').value.trim();
+        if (url) cloudCfg.url = url;
+        pullFromCloud(false);
+      });
+      document.getElementById('cloud-push-btn').addEventListener('click', () => {
+        const url = document.getElementById('cloud-url-input').value.trim();
+        if (url) cloudCfg.url = url;
+        pushToCloud(false);
+      });
+
+      // Initialize
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+      renderDaily();
+      if (cloudCfg.url) {
+        pullFromCloud(true);
+      } else {
+        updateCloudBadge('local');
+      }
+    })();
+  </script>
+</body>
+</html>
