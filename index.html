@@ -303,7 +303,7 @@
           <h3 class="text-xs font-bold text-indigo-200/80 uppercase tracking-wider">Weekly Hours &amp; Tips by Team Member</h3>
           <span id="weekly-team-totals-badge" class="text-xs font-semibold text-emerald-300 tabular-nums">Team: 00h,00m · $0.00 Tips</span>
         </div>
-        <div id="weekly-member-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+        <div id="weekly-member-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4"></div>
       </div>
 
       <!-- Team Member Weekly Summary Table -->
@@ -471,6 +471,14 @@
         badgeBg: 'bg-orange-500/20 text-orange-200 border-orange-400/30',
         glowStyle: 'radial-gradient(circle at 92% 12%, rgba(249, 115, 22, 0.16), transparent 48%)',
         barColor: '#fb923c'
+      },
+      {
+        id: 'm5',
+        defaultName: 'Member 5',
+        dotClass: 'bg-[#CEF17B] shadow-[0_0_8px_rgba(206,241,123,0.85)]',
+        badgeBg: 'bg-[#CEF17B]/15 text-[#CEF17B] border-[#CEF17B]/40',
+        glowStyle: 'radial-gradient(circle at 92% 12%, rgba(206, 241, 123, 0.2), transparent 48%)',
+        barColor: '#CEF17B'
       }
     ];
 
@@ -485,7 +493,23 @@
 
     function formatMoney(val) {
       const num = Number(val) || 0;
-      return '$' + num.toFixed(2);
+      return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatAmountField(val) {
+      const num = Number(val) || 0;
+      return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function parseAmountInput(str) {
+      const cleaned = String(str || '').replace(/,/g, '');
+      return Math.max(0, parseFloat(cleaned) || 0);
+    }
+
+    function formatCentsToDisplay(centsInt) {
+      const safeCents = Math.min(999999999, Math.max(0, Math.floor(Number(centsInt) || 0)));
+      const val = safeCents / 100;
+      return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     function parseDateLocal(dateStr) {
@@ -583,13 +607,15 @@
         m1: 'Member 1',
         m2: 'Member 2',
         m3: 'Member 3',
-        m4: 'Member 4'
+        m4: 'Member 4',
+        m5: 'Member 5'
       },
       memberRates: {
         m1: 0,
         m2: 0,
         m3: 0,
-        m4: 0
+        m4: 0,
+        m5: 0
       },
       days: {}
     };
@@ -600,7 +626,12 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === 'object') {
-            state = { ...state, ...parsed };
+            state = {
+              ...state,
+              ...parsed,
+              memberNames: { ...state.memberNames, ...(parsed.memberNames || {}) },
+              memberRates: { ...state.memberRates, ...(parsed.memberRates || {}) }
+            };
           }
         }
       } catch (e) {}
@@ -608,6 +639,15 @@
         state.days = {
           [DEFAULT_DATE]: createStandardDayEntries(DEFAULT_DATE)
         };
+      } else {
+        Object.keys(state.days).forEach(dStr => {
+          const std = dStr === DEFAULT_DATE ? createStandardDayEntries(dStr) : createEmptyDayEntries();
+          MEMBER_META.forEach(m => {
+            if (!state.days[dStr][m.id]) {
+              state.days[dStr][m.id] = std[m.id];
+            }
+          });
+        });
       }
       if (!state.weekStart) {
         state.weekStart = getMondayOfWeek(state.currentDate || DEFAULT_DATE);
@@ -682,20 +722,8 @@
       });
     }
 
-    function renderDaily() {
-      const dateStr = state.currentDate;
-      document.getElementById('input-date').value = dateStr;
-
-      const dt = parseDateLocal(dateStr);
-      const dayName = DAY_NAMES[dt.getDay()];
+    function computeDailyStats(dateStr) {
       const sched = getScheduleForDate(dateStr);
-
-      const pill = document.getElementById('daily-shift-pill');
-      pill.textContent = `${dayName} · ${sched.label}`;
-      pill.className = sched.isOpen
-        ? 'px-3.5 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 text-xs font-semibold'
-        : 'px-3.5 py-1.5 rounded-full bg-white/10 text-slate-300 border border-white/15 text-xs font-semibold';
-
       const entries = getDayEntries(dateStr);
       let totalMins = 0;
       let totalCash = 0;
@@ -714,10 +742,14 @@
         return { meta, entry: e, mins, cash, card, totalTips: cash + card };
       });
 
-      const totalTips = totalCash + totalCard;
+      return { sched, memberStats, totalMins, totalCash, totalCard, totalTips: totalCash + totalCard, workingCount };
+    }
+
+    function updateDailySummary() {
+      const dateStr = state.currentDate;
+      const { sched, memberStats, totalMins, totalCash, totalCard, totalTips, workingCount } = computeDailyStats(dateStr);
       const avgTipRate = totalMins > 0 ? totalTips / (totalMins / 60) : 0;
 
-      // Update Hero Banner
       const targetMins = sched.stdMins * MEMBER_META.length;
       const pct = targetMins > 0 ? Math.min(100, Math.round((totalMins / targetMins) * 100)) : (totalMins > 0 ? 100 : 0);
       document.getElementById('hero-shift-headline').textContent = `${formatHoursHM(totalMins)} Logged`;
@@ -735,85 +767,9 @@
       document.getElementById('kpi-standard-shift').textContent = formatHoursHM(sched.stdMins);
       document.getElementById('kpi-standard-hours-label').textContent = sched.label;
 
-      const container = document.getElementById('timecards-container');
-      container.innerHTML = '';
-
-      memberStats.forEach(({ meta, entry, mins }) => {
-        const name = state.memberNames[meta.id] || meta.defaultName;
-        const isClockedIn = Boolean(entry.clockedInAt);
-
-
-        const card = document.createElement('div');
-        card.className = `card-surface p-4 sm:p-5 space-y-3 transition-opacity ${entry.working ? '' : 'opacity-65'}`;
-        card.style.backgroundImage = `${meta.glowStyle}, linear-gradient(155deg, rgba(24, 30, 56, 0.78) 0%, rgba(13, 17, 34, 0.86) 100%)`;
-        card.innerHTML = `
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2.5">
-              <span class="w-3 h-3 rounded-full ${meta.dotClass} shrink-0"></span>
-              <input type="text" data-member-name="${meta.id}" value="${name.replace(/"/g, '&quot;')}"
-                class="font-bold text-sm sm:text-base text-white bg-transparent border-b border-transparent hover:border-white/25 focus:border-indigo-400 focus:outline-none px-0.5 py-0.5 w-32 sm:w-40" />
-              ${!entry.working ? '<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-white/10 text-slate-400 border-white/10">Off</span>' : ''}
-              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-indigo-200 border border-white/15 tabular-nums">
-                ${formatHoursHM(mins)}
-              </span>
-            </div>
-            <div class="flex items-center gap-2">
-              <button type="button" data-clock-btn="${meta.id}"
-                class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${isClockedIn ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/30' : 'glow-btn-primary text-white'}">
-                ${isClockedIn ? 'Clock Out' : 'Clock In'}
-              </button>
-              <button type="button" data-off-btn="${meta.id}"
-                class="px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${entry.working ? 'bg-white/8 hover:bg-white/15 text-slate-200 border-white/15' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/30'}">
-                ${entry.working ? 'Set Off' : 'Set Working'}
-              </button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 items-start">
-            <div class="space-y-2.5">
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Rate $/hr</label>
-                <input type="number" min="0" step="0.5" data-field="rate" data-member="${meta.id}" value="${entry.rate || 0}"
-                  class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold tabular-nums box-border" />
-              </div>
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Break (min)</label>
-                <div class="flex items-center gap-1 h-9">
-                  <input type="number" min="0" step="5" data-field="breakMin" data-member="${meta.id}" value="${entry.breakMin || 0}"
-                    ${entry.working ? '' : 'disabled'}
-                    class="glass-input w-full h-9 px-2 rounded-xl text-xs font-semibold tabular-nums box-border" />
-                  <button type="button" data-break30="${meta.id}" ${entry.working ? '' : 'disabled'}
-                    class="h-9 px-2.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-35 text-[11px] font-semibold text-slate-200 shrink-0 flex items-center justify-center">30m</button>
-                </div>
-              </div>
-            </div>
-            <div class="space-y-2.5">
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Start Time</label>
-                <input type="time" data-field="startTime" data-member="${meta.id}" value="${entry.startTime}"
-                  ${entry.working ? '' : 'disabled'}
-                  class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold tabular-nums box-border" />
-              </div>
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1">End Time</label>
-                <input type="time" data-field="endTime" data-member="${meta.id}" value="${entry.endTime}"
-                  ${entry.working ? '' : 'disabled'}
-                  class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold tabular-nums box-border" />
-              </div>
-            </div>
-            <div>
-              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cash Tips ($)</label>
-              <input type="number" min="0" step="0.5" data-field="cashTips" data-member="${meta.id}" value="${Number(entry.cashTips || 0).toFixed(2)}"
-                class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold text-emerald-300 tabular-nums box-border" />
-            </div>
-            <div>
-              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Card Tips ($)</label>
-              <input type="number" min="0" step="0.5" data-field="cardTips" data-member="${meta.id}" value="${Number(entry.cardTips || 0).toFixed(2)}"
-                class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold text-emerald-300 tabular-nums box-border" />
-            </div>
-          </div>
-        `;
-        container.appendChild(card);
+      memberStats.forEach(({ meta, mins }) => {
+        const hp = document.querySelector(`[data-member-hours="${meta.id}"]`);
+        if (hp) hp.textContent = formatHoursHM(mins);
       });
 
       document.getElementById('sidebar-total-tips-pill').textContent = `${formatMoney(totalTips)} Total`;
@@ -874,6 +830,7 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          animation: false,
           plugins: {
             legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 11 } } },
             tooltip: {
@@ -895,6 +852,106 @@
           }
         }
       });
+    }
+
+    function renderDaily() {
+      const dateStr = state.currentDate;
+      document.getElementById('input-date').value = dateStr;
+
+      const dt = parseDateLocal(dateStr);
+      const dayName = DAY_NAMES[dt.getDay()];
+      const sched = getScheduleForDate(dateStr);
+
+      const pill = document.getElementById('daily-shift-pill');
+      pill.textContent = `${dayName} · ${sched.label}`;
+      pill.className = sched.isOpen
+        ? 'px-3.5 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 text-xs font-semibold'
+        : 'px-3.5 py-1.5 rounded-full bg-white/10 text-slate-300 border border-white/15 text-xs font-semibold';
+
+      const { memberStats } = computeDailyStats(dateStr);
+
+      const container = document.getElementById('timecards-container');
+      container.innerHTML = '';
+
+      memberStats.forEach(({ meta, entry, mins }) => {
+        const name = state.memberNames[meta.id] || meta.defaultName;
+        const isClockedIn = Boolean(entry.clockedInAt);
+
+
+        const card = document.createElement('div');
+        card.className = `card-surface p-4 sm:p-5 space-y-3 transition-opacity ${entry.working ? '' : 'opacity-65'}`;
+        card.style.backgroundImage = `${meta.glowStyle}, linear-gradient(155deg, rgba(24, 30, 56, 0.78) 0%, rgba(13, 17, 34, 0.86) 100%)`;
+        card.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5">
+              <span class="w-3 h-3 rounded-full ${meta.dotClass} shrink-0"></span>
+              <input type="text" data-member-name="${meta.id}" value="${name.replace(/"/g, '&quot;')}"
+                class="font-bold text-sm sm:text-base text-white bg-transparent border-b border-transparent hover:border-white/25 focus:border-indigo-400 focus:outline-none px-0.5 py-0.5 w-32 sm:w-40" />
+              ${!entry.working ? '<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-white/10 text-slate-400 border-white/10">Off</span>' : ''}
+              <span data-member-hours="${meta.id}" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-indigo-200 border border-white/15 tabular-nums">
+                ${formatHoursHM(mins)}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" data-clock-btn="${meta.id}"
+                class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${isClockedIn ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/30' : 'glow-btn-primary text-white'}">
+                ${isClockedIn ? 'Clock Out' : 'Clock In'}
+              </button>
+              <button type="button" data-off-btn="${meta.id}"
+                class="px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${entry.working ? 'bg-white/8 hover:bg-white/15 text-slate-200 border-white/15' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/30'}">
+                ${entry.working ? 'Set Off' : 'Set Working'}
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 items-start">
+            <div class="space-y-2.5">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Rate $/hr</label>
+                <input type="number" min="0" step="0.5" data-field="rate" data-member="${meta.id}" value="${entry.rate || 0}"
+                  class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold tabular-nums box-border" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Break (min)</label>
+                <div class="flex items-center gap-1 h-9">
+                  <input type="number" min="0" step="5" data-field="breakMin" data-member="${meta.id}" value="${entry.breakMin || 0}"
+                    ${entry.working ? '' : 'disabled'}
+                    class="glass-input w-full h-9 px-2 rounded-xl text-xs font-semibold tabular-nums box-border" />
+                  <button type="button" data-break30="${meta.id}" ${entry.working ? '' : 'disabled'}
+                    class="h-9 px-2.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-35 text-[11px] font-semibold text-slate-200 shrink-0 flex items-center justify-center">30m</button>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-2.5">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Start Time</label>
+                <input type="time" data-field="startTime" data-member="${meta.id}" value="${entry.startTime}"
+                  ${entry.working ? '' : 'disabled'}
+                  class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold tabular-nums box-border" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">End Time</label>
+                <input type="time" data-field="endTime" data-member="${meta.id}" value="${entry.endTime}"
+                  ${entry.working ? '' : 'disabled'}
+                  class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold tabular-nums box-border" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cash Tips ($)</label>
+              <input type="text" inputmode="decimal" data-field="cashTips" data-member="${meta.id}" value="${formatAmountField(entry.cashTips || 0)}"
+                class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold text-emerald-300 tabular-nums box-border" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Card Tips ($)</label>
+              <input type="text" inputmode="decimal" data-field="cardTips" data-member="${meta.id}" value="${formatAmountField(entry.cardTips || 0)}"
+                class="glass-input w-full h-9 px-2.5 rounded-xl text-xs font-semibold text-emerald-300 tabular-nums box-border" />
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      updateDailySummary();
     }
 
     function computeWeeklySummary(weekStartStr) {
@@ -1274,6 +1331,7 @@
         if (nameId) {
           state.memberNames[nameId] = e.target.value || MEMBER_META.find(m => m.id === nameId).defaultName;
           saveState();
+          updateDailySummary();
           return;
         }
         const field = e.target.getAttribute('data-field');
@@ -1282,17 +1340,78 @@
         const entries = ensureDayEntries(state.currentDate);
         if (field === 'startTime' || field === 'endTime') {
           entries[memberId][field] = e.target.value;
+        } else if (field === 'cashTips' || field === 'cardTips') {
+          const el = e.target;
+          const digits = String(el.value || '').replace(/\D/g, '');
+          const cents = parseInt(digits || '0', 10);
+          const formatted = formatCentsToDisplay(cents);
+          el.value = formatted;
+          try { el.setSelectionRange(formatted.length, formatted.length); } catch (err) {}
+          entries[memberId][field] = cents / 100;
         } else {
           entries[memberId][field] = Math.max(0, parseFloat(e.target.value) || 0);
           if (field === 'rate') state.memberRates[memberId] = entries[memberId].rate;
         }
         saveState();
-        renderDaily();
+        updateDailySummary();
       });
 
       tc.addEventListener('change', (e) => {
-        if (e.target.hasAttribute('data-member-name')) {
-          renderDaily();
+        const field = e.target.getAttribute('data-field');
+        if (field === 'cashTips' || field === 'cardTips') {
+          const val = parseAmountInput(e.target.value);
+          e.target.value = formatAmountField(val);
+        }
+      });
+
+      tc.addEventListener('keydown', (e) => {
+        const field = e.target.getAttribute('data-field');
+        if (field !== 'cashTips' && field !== 'cardTips') return;
+        const memberId = e.target.getAttribute('data-member');
+        const el = e.target;
+
+        if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          const curDigits = String(el.value || '').replace(/\D/g, '');
+          const curCents = parseInt(curDigits || '0', 10);
+          const nextCents = Math.min(999999999, curCents * 10 + Number(e.key));
+          const formatted = formatCentsToDisplay(nextCents);
+          el.value = formatted;
+          try { el.setSelectionRange(formatted.length, formatted.length); } catch (err) {}
+          const entries = ensureDayEntries(state.currentDate);
+          entries[memberId][field] = nextCents / 100;
+          saveState();
+          updateDailySummary();
+          return;
+        }
+
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+          e.preventDefault();
+          const curDigits = String(el.value || '').replace(/\D/g, '');
+          const curCents = parseInt(curDigits || '0', 10);
+          const nextCents = Math.floor(curCents / 10);
+          const formatted = formatCentsToDisplay(nextCents);
+          el.value = formatted;
+          try { el.setSelectionRange(formatted.length, formatted.length); } catch (err) {}
+          const entries = ensureDayEntries(state.currentDate);
+          entries[memberId][field] = nextCents / 100;
+          saveState();
+          updateDailySummary();
+          return;
+        }
+
+        if (e.key === '.' || e.key === ',') {
+          e.preventDefault();
+        }
+      });
+
+      tc.addEventListener('focusin', (e) => {
+        const field = e.target.getAttribute('data-field');
+        if (field === 'cashTips' || field === 'cardTips') {
+          const len = e.target.value.length;
+          setTimeout(() => {
+            try { e.target.setSelectionRange(len, len); } catch (err) {}
+          }, 0);
         }
       });
 
